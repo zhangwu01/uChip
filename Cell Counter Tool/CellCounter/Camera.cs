@@ -1,14 +1,35 @@
 ﻿using Basler.Pylon;
-using System;
-using System.Collections.Generic;
+using System.Drawing.Imaging;
 
 public class Camera : IDisposable {
+    public struct CameraSettings {
+
+    }
+
+
     public Basler.Pylon.Camera camera;
 
+    public Camera() {
+        camera = new Basler.Pylon.Camera();
 
-    public Camera(int width, int height) {
-        PrepareCamera(width, height);
+        // Open the connection to the camera device.
+        camera.Open();
+        // Print the model name of the camera.
+        Console.WriteLine("Using camera {0}.", camera.CameraInfo[CameraInfoKey.ModelName]);
     }
+
+    public void Dispose() {
+        if (camera != null) {
+            camera.StreamGrabber.Stop();
+            camera.Parameters[PLCamera.Width].SetToMaximum();
+            camera.Parameters[PLCamera.Height].SetToMaximum();
+            camera.Parameters[PLCamera.AcquisitionMode].SetValue(PLCamera.AcquisitionMode.Continuous);
+            camera.Parameters[PLCamera.TriggerMode].SetValue(PLCamera.TriggerMode.Off);
+            camera.Dispose();
+        }
+    }
+
+    
 
     public static void Display(CameraImage data, int f = 0) {
         var d = data.image;
@@ -17,7 +38,6 @@ public class Camera : IDisposable {
             Array.Copy(data.image, d, d.Length);
             DrawBox(d, data.roiX1, data.roiX2, data.roiY1, data.roiY2, data.width, data.height, 0xFF);
         }
-        Display(d, data.width, data.height, f);
     }
 
     public static void Display(byte[] data, int width, int height, int f = 0) {
@@ -35,34 +55,29 @@ public class Camera : IDisposable {
         }
     }
 
-    public class CameraImage {
-        public byte[] image;
-        public byte[] roiImage;
-        public int width;
-        public int height;
-        public int roiWidth { get { return 1 + roiX2 - roiX1; } }
-        public int roiHeight { get { return 1 + roiY2 - roiY1; } }
-        public int roiX1;
-        public int roiY1;
-        public int roiX2;
-        public int roiY2;
-    }
-
 
     public CameraImage Acquire(float X = 0, float Y = 0, float W = 1, float H = 1) {
         var image = new CameraImage();
-        camera.ExecuteSoftwareTrigger();
-        camera.WaitForFrameTriggerReady(5000, TimeoutHandling.ThrowException);
-        IGrabResult grabResult = camera.StreamGrabber.RetrieveResult(5000, TimeoutHandling.ThrowException);
-        using (grabResult) {
-            // Image grabbed successfully?
-            if (grabResult.GrabSucceeded) {
-                image.image = grabResult.PixelData as byte[];
-                image.width = grabResult.Width;
-                image.height = grabResult.Height;
-                ComputeROI(ref image, X, Y, W, H);
-            } else {
-                Console.WriteLine("Grab Error: {0} {1}", grabResult.ErrorCode, grabResult.ErrorDescription);
+        lock (camera)
+        {
+            camera.ExecuteSoftwareTrigger();
+            camera.WaitForFrameTriggerReady(5000, TimeoutHandling.ThrowException);
+            IGrabResult grabResult = camera.StreamGrabber.RetrieveResult(5000, TimeoutHandling.ThrowException);
+            using (grabResult)
+            {
+                // Image grabbed successfully?
+                if (grabResult.GrabSucceeded)
+                {
+                    var data = grabResult.PixelData as byte[];
+                    image.width = grabResult.Width;
+                    image.height = grabResult.Height;
+                    image.format = PixelFormat.Format16bppGrayScale
+                    ComputeROI(ref image, X, Y, W, H);
+                }
+                else
+                {
+                    Console.WriteLine("Grab Error: {0} {1}", grabResult.ErrorCode, grabResult.ErrorDescription);
+                }
             }
         }
         return image;
@@ -88,56 +103,60 @@ public class Camera : IDisposable {
         }
     }
 
-    public void Dispose() {
-        if (camera != null) {
-            camera.Dispose();
-        }
-    }
-
-    public void PrepareCamera(int width, int height) {
-        if(camera != null) {
+    public void Set10X(bool enable)
+    {   
+        if(camera == null)
+        {
             return;
         }
-        var info = CameraFinder.Enumerate();
-        Console.WriteLine(info.Count);
-        if(info.Count == 0) {
-            Console.WriteLine("Could not find a camera.");
-            return;
+        lock (camera)
+        {
+            if (camera.StreamGrabber.IsGrabbing)
+            {
+                camera.StreamGrabber.Stop();
+            }
+            if (enable)
+            {
+                camera.Parameters[PLCamera.Width].SetValue(128);
+                camera.Parameters[PLCamera.Height].SetValue(128);
+            }
+            else
+            {
+                camera.Parameters[PLCamera.Width].SetValue(640);
+                camera.Parameters[PLCamera.Height].SetValue(240);
+            }
+            camera.StreamGrabber.Start();
         }
-        camera = new Basler.Pylon.Camera();
-        // Set the acquisition mode to free running continuous acquisition when the camera is opened.
-        camera.CameraOpened += Configuration.SoftwareTrigger;
-        // Open the connection to the camera device.
-        camera.Open();
-
-        // The parameter MaxNumBuffer can be used to control the amount of buffers
-        // allocated for grabbing. The default value of this parameter is 10.
-        camera.Parameters[PLCameraInstance.MaxNumBuffer].SetValue(5);
-        camera.Parameters[PLCamera.ExposureTime].SetToMinimum();
-        camera.Parameters[PLCamera.Width].SetValue(width);
-        camera.Parameters[PLCamera.Height].SetValue(height);
-
-        // Start grabbing.
-        camera.StreamGrabber.Start();
-
-        // Print the model name of the camera.
-        Console.WriteLine("Using camera {0}.", camera.CameraInfo[CameraInfoKey.ModelName]);
-    }
-}
-
-public class DummyCamera : Camera {
-    public int width, height;
-    public DummyCamera(int width, int height) : base(width, height){
     }
 
-    new public CameraImage Acquire(float X = 0, float Y = 0, float W = 1, float H = 1) {
-        var image = new CameraImage();
-        image.width = width;
-        image.height = height;
-        image.image = new byte[width * height];
-        var r = new Random();
-        r.NextBytes(image.image);
-        ComputeROI(ref image, X, Y, W, H);
-        return image;
+    public void DisplayImage(Camera.CameraImage image) {
+        if (bitmap == null || bitmap.Width != image.width || bitmap.Height != bitmap.Height || bitmap.PixelFormat != image.format) {
+            if (bitmap != null) {
+                bitmap.Dispose();
+            }
+            bitmap = new Bitmap(image.width, image.height, image.format);
+            display.Image = bitmap;
+        }
+
+        // Lock the bitmap's bits.  
+        System.Drawing.Rectangle rect = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
+        BitmapData bmpData =
+        bitmap.LockBits(rect, ImageLockMode.WriteOnly,
+            bitmap.PixelFormat);
+
+        // Get the address of the first line.
+        IntPtr ptr = bmpData.Scan0;
+
+        // Copy the RGB values back to the bitmap
+        System.Runtime.InteropServices.Marshal.Copy(image.image, 0, ptr, image.image.Length);
+
+        // Unlock the bits.
+        bitmap.UnlockBits(bmpData);
+
+        display.r = new System.Drawing.Rectangle((int)(((float)image.roiX1) / image.width * display.Width),
+                                                 (int)(((float)image.roiY1) / image.height * display.Height),
+                                                 (int)(((float)image.roiWidth) / image.width * display.Width),
+                                                 (int)(((float)image.roiHeight) / image.height * display.Height));
+        display.Refresh();
     }
 }

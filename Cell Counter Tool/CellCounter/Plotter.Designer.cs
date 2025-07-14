@@ -18,7 +18,6 @@ partial class Plotter {
         }
 
         private System.Windows.Forms.Splitter splitter1;
-        private System.Windows.Forms.Panel panel2;
         private System.Windows.Forms.TrackBar roiHBar;
         private System.Windows.Forms.TrackBar roiWBar;
         private System.Windows.Forms.TrackBar roiYBar;
@@ -34,4 +33,12 @@ partial class Plotter {
     private System.Windows.Forms.Panel cellCountPlotPanel;
     private System.Windows.Forms.Label totalDetectedLabel;
     private PictureBoxNN display;
+    private Button button1;
+    private Button button2;
+    private Button button3;
+    private TabControl tabControl1;
+    private TabPage tabPage1;
+    private Button button4;
+    private SaveFileDialog saveFileDialog1;
+    private Button button5;
 }

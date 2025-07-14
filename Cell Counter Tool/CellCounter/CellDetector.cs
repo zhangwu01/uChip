@@ -65,6 +65,11 @@ public class CellDetector : IDisposable
         }
     }
 
+    public void Reset()
+    {
+        detectedCells.Clear();
+    }
+
     public static float ComputeMax(in CameraImage data) {
         return 0;
     }

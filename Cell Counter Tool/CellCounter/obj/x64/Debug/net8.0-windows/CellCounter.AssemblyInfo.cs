@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("CellCounter")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+593e4bca99ed38d5920e106e7c2f5c6610b5560b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cabea0eaf5c2c95c424923bfe041dd1b56510b71")]
 [assembly: System.Reflection.AssemblyProductAttribute("CellCounter")]
 [assembly: System.Reflection.AssemblyTitleAttribute("CellCounter")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
