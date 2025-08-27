@@ -2,24 +2,26 @@ import pathlib
 import typing
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QGuiApplication, QTextFormat
+from PySide6.QtGui import QGuiApplication, QTextFormat, QIcon, QKeySequence
 from PySide6.QtWidgets import (QFrame, QLabel, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox,
-                               QDialog, QPushButton, QSizePolicy, QScrollArea)
+                               QDialog, QPushButton, QSizePolicy, QScrollArea, QMainWindow, QWidget, QMenuBar)
 
 from UI.PythonEditor import PythonEditor
 from Data.Chip import Script
 from UI.UIMaster import UIMaster
 
 
-class ScriptEditor(QDialog):
-    def __init__(self, parent, OnClose):
-        super().__init__(parent)
+class ScriptEditor(QMainWindow):
+    def __init__(self, script: typing.Optional[Script], onSave):
+        super().__init__(None)
+        self.centralWidget = QWidget()
+        self.setCentralWidget(self.centralWidget)
+
         self.pythonEditor = PythonEditor()
         self.pythonEditor.setMinimumWidth(500)
 
         self.toggleButton = QPushButton()
         self.toggleButton.clicked.connect(self.ToggleDocumentation)
-        self.setModal(False)
         self.toggleButton.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Expanding)
         self.toggleButton.setStyleSheet("""
         QPushButton {
@@ -40,16 +42,26 @@ class ScriptEditor(QDialog):
 
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.setLayout(layout)
-        self.setContentsMargins(0, 0, 0, 0)
+        self.centralWidget.setLayout(layout)
+        self.centralWidget.setContentsMargins(0, 0, 0, 0)
         self.enabled = True
 
-        self.currentScript: typing.Optional[Script] = None
+        self.script = script
         self.resize(1200, 768)
 
         self.pythonEditor.modificationChanged.connect(self.UpdateTitle)
         self.ToggleDocumentation()
-        self.OnClose = OnClose
+        self.onSave = onSave
+
+        if self.script is not None:
+            self.pythonEditor.setPlainText(self.script.Read())
+
+        self.BuildMenu()
+
+        self.show()
+        self.raise_()
+        self.setWindowIcon(QIcon("Assets/Images/icon.png"))
+        self.setStyleSheet(UIMaster.StyleSheet())
 
     def ToggleDocumentation(self):
         v = self.documentationWidget.isVisible()
@@ -57,25 +69,8 @@ class ScriptEditor(QDialog):
         self.toggleButton.setText(">" if not v else "<")
 
     def UpdateTitle(self):
-        fileName = str(self.currentScript.path.absolute()) if self.currentScript is not None else "New script"
+        fileName = str(self.script.path.absolute()) if self.script is not None else "New script"
         self.setWindowTitle(fileName + ("*" if self.pythonEditor.document().isModified() else "") + " - uChip Editor")
-
-    def keyPressEvent(self, event) -> None:
-        if not self.enabled:
-            return
-        if QGuiApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier:
-            if event.key() == Qt.Key.Key_S:
-                self.Save()
-                return
-        super().keyPressEvent(event)
-
-    def New(self):
-        self.currentScript = None
-        self.pythonEditor.setPlainText("")
-
-    def Open(self, script: Script):
-        self.currentScript = script
-        self.pythonEditor.setPlainText(self.currentScript.Read())
 
     def closeEvent(self, event) -> None:
         if self.pythonEditor.document().isModified():
@@ -83,7 +78,6 @@ class ScriptEditor(QDialog):
                 event.ignore()
                 return
         super().closeEvent(event)
-        self.OnClose()
 
     def PromptClose(self):
         value = QMessageBox.critical(self, "Confirm Action",
@@ -97,23 +91,33 @@ class ScriptEditor(QDialog):
         return True
 
     def Save(self):
-        if self.currentScript is None:
+        if self.script is None:
             d = QFileDialog.getSaveFileName(self, "Save Path", filter="uChip script (*.py)")
             if d[0]:
                 path = pathlib.Path(d[0])
             else:
                 return False
         else:
-            path = self.currentScript.path
+            path = self.script.path
         outputFile = open(path, "w+")
         outputFile.write(self.pythonEditor.toPlainText())
         outputFile.close()
-        if self.currentScript is None:
-            self.currentScript = Script(path)
-            UIMaster.Instance().currentChip.scripts.append(self.currentScript)
+        if self.script is None:
+            self.script = Script(path)
+            UIMaster.Instance().currentChip.scripts.append(self.script)
         self.pythonEditor.document().setModified(False)
+        self.onSave(self.script)
         return True
 
+    def BuildMenu(self):
+        menuBar = QMenuBar()
+
+        fileMenu = menuBar.addMenu("&File")
+        saveAction = fileMenu.addAction("Save")
+        saveAction.setShortcut(QKeySequence("Ctrl+S"))
+        saveAction.triggered.connect(self.Save)
+
+        self.setMenuBar(menuBar)
 
 class DocumentationWidget(QFrame):
     def __init__(self):

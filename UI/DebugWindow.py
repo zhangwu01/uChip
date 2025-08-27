@@ -1,5 +1,3 @@
-import threading
-import time
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import QTimer
 

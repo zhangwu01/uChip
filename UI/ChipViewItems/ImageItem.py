@@ -57,6 +57,9 @@ class ImageItem(CustomGraphicsViewItem):
         self.image.rect = [rect.x(), rect.y(), rect.width(), rect.height()]
         UIMaster.Instance().modified = True
 
+    def SetEnabled(self, state):
+        return
+
     def Update(self):
         try:
             if self.image.path != self.lastPath or \

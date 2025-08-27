@@ -2,7 +2,8 @@ import traceback
 import typing
 import pathlib
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QFormLayout, QLineEdit, \
-    QSpinBox, QDoubleSpinBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QScrollArea, QFrame, QSizePolicy
+    QSpinBox, QDoubleSpinBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QScrollArea, QFrame, QSizePolicy, \
+    QCheckBox
 from PySide6.QtCore import QRectF, Signal, Qt
 from PySide6.QtGui import QIcon, QColor, QPixmap
 
@@ -72,6 +73,12 @@ class ProgramItem(CustomGraphicsViewItem):
         self.scaleWidget.setSingleStep(0.1)
         self.scaleWidget.valueChanged.connect(self.RecordChanges)
         nameAndSourceLayout.addRow("Display scale", self.scaleWidget)
+
+        #Hide messages field
+        self.hideMessages = QComboBox()
+        self.hideMessages.addItems(["Show", "Hide"])
+        self.hideMessages.currentIndexChanged.connect(self.RecordChanges)
+        nameAndSourceLayout.addRow("Log", self.hideMessages)
 
         dummyWidget = QWidget()
         inspectorWidget.layout().addWidget(dummyWidget)
@@ -160,7 +167,9 @@ class ProgramItem(CustomGraphicsViewItem):
 
     def OnResized(self, event):
         self.fadeWidget.move(1, 1)
-        height = self.itemProxy.widget().height() - self.messageArea.height() - self.clearMessagesButton.height()
+        height = self.itemProxy.widget().height()
+        if not self.program.hideMessages:
+            height += - self.messageArea.height() - self.clearMessagesButton.height()
         self.fadeWidget.setFixedSize(self.itemProxy.widget().width() - 2, height - 2)
 
     class ResizeDelegate(QFrame):
@@ -206,7 +215,7 @@ class ProgramItem(CustomGraphicsViewItem):
                 parameterSymbol] = parameterWidgetSet.inspectorVisibilityToggle.isChecked()
 
         self.program.scale = self.scaleWidget.value()
-
+        self.program.hideMessages = self.hideMessages.currentText() == "Hide"
         UIMaster.Instance().modified = True
 
     def Update(self):
@@ -216,16 +225,26 @@ class ProgramItem(CustomGraphicsViewItem):
         if self.program.name != self.nameWidget.text():
             self.nameWidget.setText("<b>%s</b>" % self.program.name)
         if self.program.script.isBuiltIn:
-            path = self.program.script.Name() + " <i>[BUILTIN]</i>"
+            fullPath = self.program.script.Name() + " <i>[BUILTIN]</i>"
+            displayPath = fullPath
         else:
-            path = str(self.program.script.path.absolute())
-        if path != self.scriptNameWidget.text():
-            self.scriptNameWidget.setText(path)
+            fullPath = str(self.program.script.path.absolute())
+            displayPath = str(self.program.script.path.name)
+        if displayPath != self.scriptNameWidget.text():
+            self.scriptNameWidget.setText(displayPath)
+        if fullPath != self.scriptNameWidget.toolTip():
+            self.scriptNameWidget.setToolTip(fullPath)
 
         compiled = UIMaster.GetCompiledProgram(self.program)
         self.messageArea.Update(compiled.messages)
         if self.scaleWidget.value() != self.program.scale:
             self.scaleWidget.setValue(self.program.scale)
+
+        if self.hideMessages.currentIndex() != int(self.program.hideMessages):
+            self.hideMessages.setCurrentIndex(int(self.program.hideMessages))
+        self.messageArea.setVisible(not self.program.hideMessages)
+        self.clearMessagesButton.setVisible(not self.program.hideMessages)
+
 
         # Update the parameter and function widgets. These are complicated, so they have their own
         # methods for clarity.
@@ -350,11 +369,8 @@ class ProgramItem(CustomGraphicsViewItem):
 
         # Remove excessive widget sets
         for i in range(len(compiled.showableFunctions), len(self.functionWidgetSets)):
-            self.functionWidgetSets[i - 1].startButton.deleteLater()
-            self.functionWidgetSets[i - 1].stopButton.deleteLater()
-            self.functionWidgetSets[i - 1].pauseButton.deleteLater()
-            self.functionWidgetSets[i - 1].resumeButton.deleteLater()
-        self.functionWidgetSets = self.functionWidgetSets[:len(self.functionWidgetSets)]
+            self.functionWidgetSets[i].Delete()
+        self.functionWidgetSets = self.functionWidgetSets[:len(compiled.showableFunctions)]
 
         # Update widget sets
         for functionSymbol, functionWidgetSet in zip(compiled.showableFunctions,
@@ -377,24 +393,29 @@ class ProgramItem(CustomGraphicsViewItem):
         compiled.programFunctions[compiled.showableFunctions[index]]()
 
     def Duplicate(self):
-        newProgram = Program()
+        newProgram = Program(self.program.script)
         newProgram.name = self.program.name
-        newProgram.path = self.program.path
         newProgram.scale = self.program.scale
         newProgram.parameterValues = self.program.parameterValues.copy()
         newProgram.parameterVisibility = self.program.parameterVisibility.copy()
+        newProgram.hideMessages = self.program.hideMessages
         UIMaster.Instance().currentChip.programs.append(newProgram)
         UIMaster.Instance().modified = True
         return ProgramItem(newProgram)
 
     def SetRect(self, rect: QRectF):
         super().SetRect(QRectF(rect))
+
+        self.itemProxy.adjustSize()
+        self.itemProxy.setScale(self.program.scale)
+        self.UpdateGeometry()
         self.RecordChanges()
 
     def OnRemoved(self):
         UIMaster.Instance().currentChip.programs.remove(self.program)
         UIMaster.Instance().RemoveProgram(self.program)
         UIMaster.Instance().modified = True
+        return True
 
 
 # Convenience structure that stores the widgets for a single parameter.
@@ -470,6 +491,11 @@ class FunctionWidgetSet:
         self.resumeButton.setFixedWidth(50)
         self.stopButton.setFixedWidth(50)
 
+    def Delete(self):
+        self.pauseButton.deleteLater()
+        self.resumeButton.deleteLater()
+        self.stopButton.deleteLater()
+        self.label.deleteLater()
 
 # Control widget for a UI-editable parameter.
 class ParameterValueWidget(QWidget):

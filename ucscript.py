@@ -88,7 +88,7 @@ class ProgramFunction:
         self.canAsync = True
         self.onStop: typing.Optional[Callable] = lambda: None
         self.onPause: typing.Optional[Callable] = lambda: None
-        self.onResume: typing.Optional[Callable] = lambda: None()
+        self.onResume: typing.Optional[Callable] = lambda: None
         self.hidden = True
 
     def __call__(self, *args, **kwargs):

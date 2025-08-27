@@ -165,6 +165,8 @@ class ChipView(QWidget):
                         UIMaster.Instance().currentChip.programs]
         self.graphicsView.AddItems(programItems)
 
+        self.graphicsView.ZoomBounds()
+
 
 class ToolButton(QToolButton):
     def __init__(self, tooltip: str, label: str, icon_path: str, delegate: typing.Callable, size=(60, 50),

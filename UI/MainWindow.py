@@ -12,7 +12,8 @@ from UI.UIMaster import UIMaster
 from UI.ProgramWorker import ProgramWorker
 from UI.USBWorker import USBWorker
 from Data.FileIO import SaveObject, LoadObject
-from Data.Chip import Chip
+from Data.Chip import Chip, Script
+from UI.ScriptEditor import ScriptEditor
 
 
 class MainWindow(QMainWindow):
@@ -62,7 +63,30 @@ class MainWindow(QMainWindow):
         self.ToggleRig()
         self.ToggleRig()
 
+        self.scriptEditors: typing.List[ScriptEditor] = []
+        self.chipEditor.scriptBrowser.onEditScript = self.OpenScriptEditor
+
         self.setStyleSheet(UIMaster.StyleSheet())
+
+        self.show()
+
+
+    def OpenScriptEditor(self, script: typing.Optional[Script]):
+        self.scriptEditors = [e for e in self.scriptEditors if e is not None and e.isVisible()]
+        if script is None:
+            self.scriptEditors.append(ScriptEditor(None, self.OnScriptSaved))
+            return
+
+        for editor in self.scriptEditors:
+            if editor.script == script:
+                editor.activateWindow()
+                editor.raise_()
+                return
+
+        self.scriptEditors.append(ScriptEditor(script, self.OnScriptSaved))
+
+    def OnScriptSaved(self, script: Script):
+        self.chipEditor.scriptBrowser.RelistAndSelect(script)
 
     def ToggleRig(self):
         self.rigView.setHidden(not self.rigView.isHidden())
@@ -105,15 +129,18 @@ class MainWindow(QMainWindow):
             return
         d = QFileDialog.getOpenFileName(self, "Open Chip", filter="uChip Project (*.ucp)")
         if d[0]:
-            self.chipEditor.CloseChip()
-            UIMaster.Instance().currentChipPath = pathlib.Path(d[0])
-            UIMaster.Instance().currentChip = LoadObject(UIMaster.Instance().currentChipPath)
-            UIMaster.Instance().currentChip.ConvertPathsToAbsolute(UIMaster.Instance().currentChipPath)
-            self.chipEditor.OpenChip()
-            UIMaster.Instance().modified = False
-            self.SetWindowTitle()
+            self.OpenChipPath(d[0])
         else:
             return
+
+    def OpenChipPath(self, path):
+        self.chipEditor.CloseChip()
+        UIMaster.Instance().currentChipPath = pathlib.Path(path)
+        UIMaster.Instance().currentChip = LoadObject(UIMaster.Instance().currentChipPath)
+        UIMaster.Instance().currentChip.ConvertPathsToAbsolute(UIMaster.Instance().currentChipPath)
+        self.chipEditor.OpenChip()
+        UIMaster.Instance().modified = False
+        self.SetWindowTitle()
 
     def PromptCloseChip(self):
         if UIMaster.Instance().modified:
@@ -138,6 +165,9 @@ class MainWindow(QMainWindow):
             self.usbWorker.doStop = True
             self.programWorker.thread.join()
             self.usbWorker.thread.join()
+            for v in self.scriptEditors:
+                if v is not None:
+                    v.close()
             UIMaster.Shutdown()
         else:
             event.ignore()

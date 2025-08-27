@@ -1,11 +1,8 @@
-import typing
-
 from PySide6.QtWidgets import QDialog, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QFileDialog, \
     QListWidgetItem, QMessageBox
 from PySide6.QtCore import Qt, QPoint
 from Data.Chip import Script
 from UI.PythonEditor import PythonEditor
-from UI.ScriptEditor import ScriptEditor
 from UI.UIMaster import UIMaster
 
 import pathlib
@@ -63,9 +60,8 @@ class ScriptBrowser(QDialog):
         mainLayout.addLayout(listLayout, stretch=0)
         mainLayout.addLayout(previewLayout, stretch=1)
 
-        self.scriptEditor = ScriptEditor(self, self.OnClosed)
-        self.scriptEditor.hide()
         self.setLayout(mainLayout)
+        self.onEditScript = lambda x: None
 
         if ScriptBrowser._instance is None:
             ScriptBrowser._instance = self
@@ -90,20 +86,14 @@ class ScriptBrowser(QDialog):
         self.Relist()
 
     def NewScript(self):
-        self.scriptEditor.New()
-        self.OpenEditor()
+        self.onEditScript(None)
 
     def EditScript(self):
-        self.scriptEditor.Open(self.SelectedScript())
-        self.OpenEditor()
+        self.onEditScript(self.SelectedScript())
 
-    def OpenEditor(self):
-        self.scriptEditor.show()
-
-    def OnClosed(self):
-        if self.scriptEditor.currentScript is not None:
-            self.Relist()
-            self.SelectScript(self.scriptEditor.currentScript)
+    def RelistAndSelect(self, script: Script):
+        self.Relist()
+        self.SelectScript(script)
 
     @staticmethod
     def Scripts():
@@ -158,6 +148,8 @@ class ScriptBrowser(QDialog):
         self.hide()
 
     def SelectScript(self, script: Script):
+        if script not in ScriptBrowser.Scripts():
+            return
         self.scriptList.setCurrentRow(ScriptBrowser.Scripts().index(script))
 
     def RefindScript(self):

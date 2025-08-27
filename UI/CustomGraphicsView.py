@@ -1,3 +1,4 @@
+import math
 import weakref
 from typing import List, Optional
 from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QWidget, QGraphicsProxyWidget, \
@@ -114,7 +115,9 @@ class CustomGraphicsView(QGraphicsView):
         self.selectionBoxRectScreenSize = 2
         self.selectionBoxRectColor = QColor(200, 200, 255)
         self.selectedItemBorderSize = 4
+        self.hoverItemBorderSize = 3
         self.selectedItemBorderColor = QColor(200, 200, 255)
+        self.hoverItemBorderColor = QColor(200, 200, 255)
         self.scene().addItem(self.selectionBoxRectItem)
 
         self._transformStartMousePos = QPointF()
@@ -168,6 +171,14 @@ class CustomGraphicsView(QGraphicsView):
             return
         selectionRect = reduce(QRectF.united, [item.GetRect() for item in self.selectedItems])
         self.viewOffset = selectionRect.center()
+        self.UpdateViewMatrix()
+
+    def ZoomBounds(self):
+        if len(self.allItems) == 0:
+            return
+        itemRect: QRectF = reduce(QRectF.united, [item.GetRect() for item in self.allItems])
+        self.zoom = 1 / math.log10(max(itemRect.width(), itemRect.height()))
+        self.viewOffset = itemRect.center()
         self.UpdateViewMatrix()
 
     def UpdateZoom(self, scenePositionAnchor: QPointF, newZoom: float):
@@ -244,6 +255,8 @@ class CustomGraphicsView(QGraphicsView):
 
     @staticmethod
     def Snap(x, div):
+        if QGuiApplication.keyboardModifiers() & Qt.KeyboardModifier.AltModifier:
+            return x
         return round(float(x) / div) * div
 
     def WidgetUnderMouseAlwaysInteractable(self):
@@ -364,11 +377,21 @@ class CustomGraphicsView(QGraphicsView):
 
     def UpdateSelectionDisplay(self):
         selectedItemBorderSceneSize = self.GetPixelSceneSize(self.selectedItemBorderSize)
+        hoverItemBorderSceneSize = self.GetPixelSceneSize(self.hoverItemBorderSize)
+        itemsInRect = [x for x in self.allItems if x.itemProxy.sceneBoundingRect().intersects(
+            self.rubberBandRectItem.sceneBoundingRect()) or x.borderRectItem.contains(
+            self.mouseScenePosition)]
+
         for item in self.allItems:
             isSelected = item in self.selectedItems
-            item.borderRectItem.setVisible(isSelected)
-            item.borderRectItem.setPen(
-                QPen(self.selectedItemBorderColor, selectedItemBorderSceneSize))
+            isHovered = item in itemsInRect if self.state == CustomGraphicsViewState.BAND_SELECTING else item == self.itemUnderMouse
+            item.borderRectItem.setVisible(isSelected or isHovered)
+            if not isSelected and isHovered:
+                item.borderRectItem.setPen(
+                    QPen(self.hoverItemBorderColor, hoverItemBorderSceneSize))
+            else:
+                item.borderRectItem.setPen(
+                    QPen(self.selectedItemBorderColor, selectedItemBorderSceneSize))
         self.UpdateSelectionBox()
 
     def UpdateInspectors(self):

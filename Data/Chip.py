@@ -84,3 +84,9 @@ class Program:
         self.parameterValues: Dict[str, Any] = {}
         self.parameterVisibility: Dict[str, Any] = {}
         self.name = ""
+        self.hideMessages = False
+
+    def __setstate__(self, state):
+        if "hideMessages" not in state:
+            state["hideMessages"] = False
+        self.__dict__ = state

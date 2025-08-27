@@ -130,17 +130,14 @@ class Device:
         Manufacturer: {}
         Product: {}
         Interface: {}
-        Description: {}
-        HWID: {}
         """.format(self.portInfo.name,
                    self.portInfo.device,
                    self.portInfo.serial_number,
                    self.portInfo.location,
                    self.portInfo.manufacturer,
                    self.portInfo.product,
-                   self.portInfo.interface,
-                   self.portInfo.description,
-                   self.portInfo.hwid).replace("    ", "\t").replace("\t", "")
+                   self.portInfo.interface
+                   ).replace("    ", "\t").replace("\t", "")
 
 
 def ConvertPinStatesToBytes(state: List[bool]):
